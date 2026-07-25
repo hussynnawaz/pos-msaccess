@@ -1,0 +1,12 @@
+{
+    "name": "hussa/point-of-sale",
+    "authors": [
+        {
+            "name": "hussynnawaz",
+            "email": "hussyn.nawaz@gmail.com"
+        }
+    ],
+    "require": {
+        "dompdf/dompdf": "^3.1"
+    }
+}
