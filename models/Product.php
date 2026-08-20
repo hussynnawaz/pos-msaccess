@@ -15,7 +15,7 @@ class Product
 
         if (!empty($filters['search'])) {
             $search = $this->db->quote('%' . $filters['search'] . '%');
-            $where[] = "(p.name LIKE {$search} OR p.barcode LIKE {$search})";
+            $where[] = "(p.name LIKE {$search} OR p.barcode LIKE {$search} OR p.sku LIKE {$search})";
         }
 
         if (!empty($filters['category'])) {
@@ -38,10 +38,7 @@ class Product
         $perPage = (int)($filters['per_page'] ?? 50);
         $offset = ($page - 1) * $perPage;
 
-        $sql = "SELECT p.id, p.name, p.barcode, p.sku, p.category, p.purchase_price, p.selling_price, p.discount_pct, p.gst_amount, p.wht_amount, p.stock, p.unit, p.is_active, p.has_variants
-                FROM products p
-                WHERE " . implode(' AND ', $where) . "
-                ORDER BY p.id DESC";
+        $sql = "SELECT * FROM products p WHERE " . implode(' AND ', $where);
 
         $rs = $this->db->getConnection()->Execute($sql);
 
@@ -66,6 +63,13 @@ class Product
         $sql = "SELECT COUNT(*) AS cnt FROM products p WHERE " . implode(' AND ', $where);
         $result = $this->db->queryOne($sql);
         return (int)($result['cnt'] ?? 0);
+    }
+
+    public function findByBarcode(string $barcode): ?array
+    {
+        $barcode = $this->db->quote($barcode);
+        $sql = "SELECT * FROM products WHERE barcode = {$barcode} AND is_active = 1";
+        return $this->db->queryOne($sql);
     }
 
     public function find(int $id): ?array
@@ -174,16 +178,18 @@ class Product
         return (int)$result;
     }
 
-    public function categories(): array
-    {
-        $rs = $this->db->getConnection()->Execute("SELECT [name] FROM categories ORDER BY [name]");
-        $results = [];
-        if ($rs && !$rs->EOF) {
-            while (!$rs->EOF) {
-                $results[] = $this->db->castVariant($rs->Fields('name')->Value);
-                $rs->MoveNext();
-            }
-        }
-        return $results;
+public function categories(): array
+{
+    $rs = $this->db->getConnection()->Execute("SELECT [name] FROM [categories]");
+
+    $results = [];
+
+    while (!$rs->EOF) {
+        $results[] = $rs->Fields("name")->Value;
+        $rs->MoveNext();
     }
+
+    return $results;
 }
+}
+

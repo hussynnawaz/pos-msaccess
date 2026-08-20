@@ -2,6 +2,10 @@ var cart = [];
 var lastOrderData = null;
 var posInitialized = false;
 var selectedSuggestionIndex = -1;
+var productCache = {};
+var searchCache = {};
+var searchCacheExpiry = {};
+var SEARCH_CACHE_TTL = 30000;
 
 function initPOS() {
     var el = document.getElementById('barcodeInput');
@@ -16,48 +20,109 @@ function initPOS() {
     recalculate();
 }
 
+function getCachedProduct(query) {
+    if (productCache[query]) return productCache[query];
+    return null;
+}
+
+function cacheProduct(query, product) {
+    productCache[query] = product;
+}
+
+function getCachedSearchResults(query) {
+    if (searchCache[query] && searchCacheExpiry[query] && Date.now() < searchCacheExpiry[query]) {
+        return searchCache[query];
+    }
+    return null;
+}
+
+function cacheSearchResults(query, results) {
+    searchCache[query] = results;
+    searchCacheExpiry[query] = Date.now() + SEARCH_CACHE_TTL;
+}
+
+function playErrorBeep() {
+    try {
+        var ctx = new (window.AudioContext || window.webkitAudioContext)();
+        var oscillator = ctx.createOscillator();
+        var gainNode = ctx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        oscillator.type = 'square';
+        oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+        gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+        oscillator.start(ctx.currentTime);
+        oscillator.stop(ctx.currentTime + 0.3);
+        setTimeout(function() {
+            var osc2 = ctx.createOscillator();
+            var gain2 = ctx.createGain();
+            osc2.connect(gain2);
+            gain2.connect(ctx.destination);
+            osc2.type = 'square';
+            osc2.frequency.setValueAtTime(660, ctx.currentTime);
+            gain2.gain.setValueAtTime(0.3, ctx.currentTime);
+            gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+            osc2.start(ctx.currentTime);
+            osc2.stop(ctx.currentTime + 0.3);
+        }, 150);
+    } catch (e) {}
+}
+
+function showProductErrorModal(message) {
+    var modal = document.getElementById('productErrorModal');
+    var msgEl = document.getElementById('productErrorMessage');
+    if (!modal) return;
+    if (msgEl) msgEl.textContent = message || 'This product is not in the database or failed to fetch the product.';
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    playErrorBeep();
+}
+
+function closeProductErrorModal() {
+    var modal = document.getElementById('productErrorModal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    var inp = document.getElementById('barcodeInput');
+    if (inp) { inp.value = ''; inp.focus(); }
+}
+
 function setupPOSListeners() {
     var barcodeInput = document.getElementById('barcodeInput');
     var suggestions = document.getElementById('barcodeSuggestions');
+    var searchDebounce = null;
 
     barcodeInput.oninput = function() {
-        var query = this.value.trim();
+        var self = this;
+        var query = self.value.trim();
         selectedSuggestionIndex = -1;
         if (query.length < 1) { suggestions.classList.add('hidden'); return; }
 
-        fetch('/api/products.php?search=' + encodeURIComponent(query), { credentials: 'same-origin' })
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (data.success && data.data.length > 0) {
-                    var html = '';
-                    for (var i = 0; i < data.data.length; i++) {
-                        var p = data.data[i];
-                        var safeName = escHtml(p.name);
-                        var safeSku = escHtml(p.sku || '-');
-                        var safeBarcode = escHtml(p.barcode || '-');
-                        var price = parseFloat(p.selling_price).toFixed(2);
-                        var purPrice = parseFloat(p.purchase_price).toFixed(2);
-                        var pJson = JSON.stringify(p).replace(/'/g, "&#39;").replace(/\\/g, "\\\\").replace(/"/g, "&quot;");
-                        html += '<div class="suggestion-item px-4 py-3 hover:bg-blue-50 cursor-pointer border-b border-gray-50 last:border-0" data-index="' + i + '" data-product="' + pJson + '" onclick="addProductToCart(' + pJson + ')">';
-                        html += '<div class="flex items-center justify-between"><div>';
-                        html += '<p class="text-sm font-medium text-gray-900">' + safeName + '</p>';
-                        html += '<p class="text-xs text-gray-500">SKU: ' + safeSku + ' | Barcode: ' + safeBarcode + '</p>';
-                        html += '<p class="text-xs text-gray-400 mt-1">Pur. Price: Rs. ' + purPrice + ' | Stock: ' + p.stock + '</p>';
-                        html += '</div><div class="text-right">';
-                        html += '<p class="text-sm font-semibold text-gray-900">Rs. ' + price + '</p>';
-                        html += '</div></div></div>';
+        clearTimeout(searchDebounce);
+        searchDebounce = setTimeout(function() {
+            var cached = getCachedSearchResults(query);
+            if (cached) {
+                renderSuggestions(cached, suggestions);
+                return;
+            }
+
+            fetch('/api/products.php?search=' + encodeURIComponent(query), { credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.success && data.data.length > 0) {
+                        cacheSearchResults(query, data.data);
+                        renderSuggestions(data.data, suggestions);
+                    } else {
+                        suggestions.innerHTML = '<div class="px-4 py-3 text-sm text-gray-400">No products found</div>';
+                        suggestions.classList.remove('hidden');
                     }
-                    suggestions.innerHTML = html;
+                })
+                .catch(function() {
+                    suggestions.innerHTML = '<div class="px-4 py-3 text-sm text-red-400">Error searching products</div>';
                     suggestions.classList.remove('hidden');
-                } else {
-                    suggestions.innerHTML = '<div class="px-4 py-3 text-sm text-gray-400">No products found</div>';
-                    suggestions.classList.remove('hidden');
-                }
-            })
-            .catch(function() {
-                suggestions.innerHTML = '<div class="px-4 py-3 text-sm text-red-400">Error searching products</div>';
-                suggestions.classList.remove('hidden');
-            });
+                });
+        }, 150);
     };
 
     barcodeInput.onkeydown = function(e) {
@@ -90,24 +155,36 @@ function setupPOSListeners() {
             }
             var query = this.value.trim();
             if (!query) return;
-            fetch('/api/products.php?search=' + encodeURIComponent(query), { credentials: 'same-origin' })
+
+            var cached = getCachedProduct(query);
+            if (cached) {
+                addProductToCart(cached);
+                this.value = '';
+                suggestions.classList.add('hidden');
+                selectedSuggestionIndex = -1;
+                return;
+            }
+
+            var self = this;
+            fetch('/api/products.php?barcode=' + encodeURIComponent(query), { credentials: 'same-origin' })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     if (data.success && data.data.length > 0) {
-                        var exact = null;
-                        for (var i = 0; i < data.data.length; i++) {
-                            if (data.data[i].barcode === query || data.data[i].sku === query) {
-                                exact = data.data[i];
-                                break;
-                            }
-                        }
-                        addProductToCart(exact || data.data[0]);
-                    } else { showToast('Product not found'); }
+                        var product = data.data[0];
+                        cacheProduct(query, product);
+                        addProductToCart(product);
+                    } else {
+                        showProductErrorModal('This product is not in the database or failed to fetch the product.');
+                    }
                 })
-                .catch(function() { showToast('Error looking up product'); });
-            this.value = '';
-            suggestions.classList.add('hidden');
-            selectedSuggestionIndex = -1;
+                .catch(function() {
+                    showProductErrorModal('This product is not in the database or failed to fetch the product.');
+                })
+                .finally(function() {
+                    self.value = '';
+                    suggestions.classList.add('hidden');
+                    selectedSuggestionIndex = -1;
+                });
         }
     };
 
@@ -127,6 +204,29 @@ function setupPOSListeners() {
             if (section) section.style.display = this.value === 'credit' ? 'none' : 'block';
         };
     }
+}
+
+function renderSuggestions(products, suggestionsContainer) {
+    var html = '';
+    for (var i = 0; i < products.length; i++) {
+        var p = products[i];
+        var safeName = escHtml(p.name);
+        var safeSku = escHtml(p.sku || '-');
+        var safeBarcode = escHtml(p.barcode || '-');
+        var price = parseFloat(p.selling_price).toFixed(2);
+        var purPrice = parseFloat(p.purchase_price).toFixed(2);
+        var pJson = JSON.stringify(p).replace(/'/g, "&#39;").replace(/\\/g, "\\\\").replace(/"/g, "&quot;");
+        html += '<div class="suggestion-item px-4 py-3 hover:bg-blue-50 cursor-pointer border-b border-gray-50 last:border-0" data-index="' + i + '" data-product="' + pJson + '" onclick="addProductToCart(' + pJson + ')">';
+        html += '<div class="flex items-center justify-between"><div>';
+        html += '<p class="text-sm font-medium text-gray-900">' + safeName + '</p>';
+        html += '<p class="text-xs text-gray-500">SKU: ' + safeSku + ' | Barcode: ' + safeBarcode + '</p>';
+        html += '<p class="text-xs text-gray-400 mt-1">Pur. Price: Rs. ' + purPrice + ' | Stock: ' + p.stock + '</p>';
+        html += '</div><div class="text-right">';
+        html += '<p class="text-sm font-semibold text-gray-900">Rs. ' + price + '</p>';
+        html += '</div></div></div>';
+    }
+    suggestionsContainer.innerHTML = html;
+    suggestionsContainer.classList.remove('hidden');
 }
 
 function updateSuggestionHighlight(items) {

@@ -28,3 +28,6 @@ spl_autoload_register(function ($class) {
 });
 
 SecurityHeaders::send();
+
+// Reset DB singleton so each request gets a fresh COM connection
+Database::resetInstance();

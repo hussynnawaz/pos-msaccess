@@ -116,6 +116,17 @@ $userName = $_SESSION['user_name'] ?? 'Admin';
     <span id="toastMessage"></span>
 </div>
 
+<div id="productErrorModal" class="fixed inset-0 bg-black/50 z-[60] hidden items-center justify-center">
+    <div class="bg-white rounded-2xl shadow-2xl w-80 mx-4 p-8 text-center">
+        <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </div>
+        <h3 class="text-lg font-semibold text-gray-900 mb-2">Product Not Found</h3>
+        <p id="productErrorMessage" class="text-sm text-gray-500 mb-6">This product is not in the database or failed to fetch the product.</p>
+        <button onclick="closeProductErrorModal()" class="w-full px-4 py-2.5 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg transition-colors">OK</button>
+    </div>
+</div>
+
 <script>
 var cashierName = '<?php echo addslashes($userName); ?>';
 (function() {
@@ -126,6 +137,15 @@ var cashierName = '<?php echo addslashes($userName); ?>';
         if (input) input.value = saved;
     }
 })();
+document.getElementById('productErrorModal').addEventListener('click', function(e) {
+    if (e.target === this) closeProductErrorModal();
+});
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        var modal = document.getElementById('productErrorModal');
+        if (modal && !modal.classList.contains('hidden')) closeProductErrorModal();
+    }
+});
 </script>
 <script src="/views/admin/pages/pos.js"></script>
 </body>

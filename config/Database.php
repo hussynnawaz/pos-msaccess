@@ -33,11 +33,24 @@ class Database
      */
     public function getConnection()
     {
-        if ($this->connection === null) {
-            $this->connection = new COM("ADODB.Connection");
-            $this->connection->Open("Provider=Microsoft.ACE.OLEDB.12.0;Data Source={$this->dbPath}");
-            $this->connection->CursorLocation = 3; // adUseClient
+        if ($this->connection !== null) {
+            return $this->connection;
         }
+
+        if (!file_exists($this->dbPath)) {
+            throw new \RuntimeException("Database file not found: {$this->dbPath}");
+        }
+
+        try {
+            $this->connection = new COM("ADODB.Connection");
+            $this->connection->Mode = 3; // adModeReadWrite (shared)
+            $this->connection->Open("Provider=Microsoft.ACE.OLEDB.12.0;Data Source={$this->dbPath};Mode=Share Deny None");
+            $this->connection->CursorLocation = 3; // adUseClient
+        } catch (\com_exception $e) {
+            $this->connection = null;
+            throw $e;
+        }
+
         return $this->connection;
     }
 
@@ -183,6 +196,47 @@ class Database
     public function getDbPath(): string
     {
         return $this->dbPath;
+    }
+
+    /**
+     * Close the ADODB connection and release the lock file
+     */
+    public function close(): void
+    {
+        if ($this->connection !== null) {
+            try {
+                $this->connection->Close();
+            } catch (\Throwable $e) {
+                // Ignore close errors
+            }
+            try {
+                $this->connection = null;
+                $this->__destruct();
+            } catch (\Throwable $e) {
+                // Ignore
+            }
+        }
+    }
+
+    /**
+     * Reset the singleton so next request gets a fresh instance
+     */
+    public static function resetInstance(): void
+    {
+        if (self::$instance !== null) {
+            self::$instance->close();
+            self::$instance = null;
+        }
+    }
+
+    public function __destruct()
+    {
+        if ($this->connection !== null) {
+            try {
+                $this->connection->Close();
+            } catch (\Throwable $e) {}
+            $this->connection = null;
+        }
     }
 
     private function __clone() {}

@@ -14,6 +14,11 @@ $product = new Product();
 try {
     switch ($_SERVER['REQUEST_METHOD']) {
         case 'GET':
+            if (!empty($_GET['barcode'])) {
+                $product_data = $product->findByBarcode($_GET['barcode']);
+                echo json_encode(['success' => !!$product_data, 'data' => $product_data ? [$product_data] : []]);
+                break;
+            }
             $filters = [
                 'search'   => $_GET['search'] ?? '',
                 'category' => $_GET['category'] ?? '',
