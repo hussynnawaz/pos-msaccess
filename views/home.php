@@ -1,3 +1,12 @@
+<?php
+require_once __DIR__ . '/../bootstrap.php';
+$session = new SessionManager();
+$session->start();
+if ($session->isLoggedIn()) {
+    header('Location: /admin');
+    exit;
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>

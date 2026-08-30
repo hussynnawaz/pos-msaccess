@@ -3,6 +3,10 @@ require_once __DIR__ . '/../../bootstrap.php';
 
 $session = new SessionManager();
 $session->start();
+if ($session->isLoggedIn()) {
+    header('Location: /admin');
+    exit;
+}
 $csrf = new CsrfProtection();
 $token = $csrf->generateToken();
 ?>

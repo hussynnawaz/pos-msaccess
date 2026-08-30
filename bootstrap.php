@@ -31,3 +31,8 @@ SecurityHeaders::send();
 
 // Reset DB singleton so each request gets a fresh COM connection
 Database::resetInstance();
+
+// Ensure DB connection is closed at request end to release .laccdb lock file
+register_shutdown_function(function () {
+    Database::resetInstance();
+});

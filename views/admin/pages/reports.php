@@ -181,81 +181,111 @@ function printPosReceipt(saleId) {
             var itemsHtml = '';
             for (var i = 0; i < items.length; i++) {
                 var item = items[i];
-                itemsHtml += '<tr><td>' + esc(item.product_name) + '</td>';
-                itemsHtml += '<td class="c">' + item.quantity + '</td>';
-                itemsHtml += '<td class="r">Rs. ' + parseFloat(item.total).toFixed(2) + '</td></tr>';
+                var itemLines =
+                    '<div class="item-row">' +
+                    '<div class="item-left">' +
+                    '<div class="item-name">' + esc(item.product_name) + '</div>' +
+                    '<div class="item-qty-price">' + item.quantity + ' x Rs. ' + parseFloat(item.selling_price).toFixed(2) + '</div>' +
+                    '</div>' +
+                    '<div class="item-right">Rs. ' + parseFloat(item.total).toFixed(2) + '</div>' +
+                    '</div>';
+                if (parseFloat(item.discount) > 0 || parseFloat(item.tax) > 0) {
+                    var details = [];
+                    if (parseFloat(item.discount) > 0) details.push('Disc: -Rs.' + parseFloat(item.discount).toFixed(2));
+                    if (parseFloat(item.tax) > 0) details.push('Tax: ' + item.tax + '%');
+                    itemLines += '<div class="item-sub">' + details.join(' | ') + '</div>';
+                }
+                itemsHtml += itemLines;
             }
 
             var paidSection = '';
             if (parseFloat(d.amount_paid) > 0) {
-                paidSection = '<div class="row"><span>Paid</span><span>Rs. ' + parseFloat(d.amount_paid).toFixed(2) + '</span></div>';
-                paidSection += '<div class="row"><span>Change</span><span>Rs. ' + parseFloat(d.change_amount).toFixed(2) + '</span></div>';
+                paidSection =
+                    '<div class="summary-row"><span>Amount Paid</span><span>Rs. ' + parseFloat(d.amount_paid).toFixed(2) + '</span></div>' +
+                    '<div class="summary-row highlight-green"><span>Change</span><span>Rs. ' + parseFloat(d.change_amount).toFixed(2) + '</span></div>';
             }
 
-            var receiptHtml = '<!DOCTYPE html><html><head><style>' +
-                '@page { margin: 0 !important; size: 80mm; }' +
+            var receiptHtml =
+                '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>' +
+                '@page { margin: 0 !important; size: 80mm auto; }' +
                 '@media print { html, body { margin: 0 !important; padding: 0 !important; width: 80mm !important; overflow: hidden !important; } }' +
-                '* { margin: 0; padding: 0; box-sizing: border-box; }' +
-                'html, body { width: 80mm; margin: 0; padding: 0; font-family: "Courier New", monospace; font-size: 10px; color: #000; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; overflow-x: hidden; }' +
-                '.receipt { width: 100%; margin: 0; padding: 0; }' +
+                '* { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }' +
+                'html, body { width: 80mm; font-family: Calibri, sans-serif; font-size: 11px; color: #000; background: #fff; }' +
+                '@media print { ' +
+                '  body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }' +
+                '  .receipt { filter: contrast(1.8) brightness(0.85) !important; }' +
+                '}' +
+                '.receipt { width: 80mm; padding: 4mm 3mm; filter: contrast(1.8) brightness(0.15); }' +
                 '.center { text-align: center; }' +
-                '.store-name { font-size: 13px; font-weight: bold; letter-spacing: 1px; margin-bottom: 0.5mm; }' +
-                '.store-info { font-size: 7.5px; color: #666; margin-bottom: 1mm; }' +
-                '.divider { border-top: 1px dashed #999; margin: 1.5mm 0; }' +
-                '.double-divider { border-top: 2px double #000; margin: 1.5mm 0; }' +
-                '.info-row { display: flex; justify-content: space-between; font-size: 9px; margin-bottom: 0.3mm; line-height: 1.3; }' +
-                '.info-row span:first-child { color: #555; }' +
-                'table { width: 100%; border-collapse: collapse; margin: 1mm 0; font-size: 9px; }' +
-                'th { border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 1mm 0; text-align: left; font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.5px; }' +
-                'td { padding: 0.8mm 0; vertical-align: top; line-height: 1.2; }' +
-                '.r { text-align: right; } .c { text-align: center; }' +
-                '.totals { margin-top: 1mm; }' +
-                '.totals .row { display: flex; justify-content: space-between; padding: 0.5mm 0; font-size: 9px; }' +
-                '.totals .row span:first-child { color: #555; }' +
-                '.totals .grand { border-top: 2px solid #000; padding-top: 1mm; margin-top: 1mm; font-size: 12px; font-weight: bold; letter-spacing: 0.5px; }' +
-                '.thank-you { font-size: 9.5px; font-weight: bold; margin-top: 2mm; color: #333; text-align: center; }' +
-                '.footer { text-align: center; margin-top: 1mm; font-size: 7.5px; color: #888; }' +
+                '.logo { width: 38mm; margin: 0 auto 2mm; display: block; }' +
+                '.store-name { font-size: 15px; font-weight: 900; letter-spacing: 1.5px; margin-bottom: 1mm; color: #000; }' +
+                '.store-tagline { font-size: 8px; color: #333; letter-spacing: 0.5px; margin-bottom: 2mm; font-weight: 600; }' +
+                '.store-contact { font-size: 7.5px; color: #444; margin-bottom: 1mm; font-weight: 600; }' +
+                '.divider { border-top: 1px dashed #666; margin: 2mm 0; }' +
+                '.divider-solid { border-top: 2px solid #000; margin: 2mm 0; }' +
+                '.divider-double { border-top: 3px double #000; margin: 2mm 0; }' +
+                '.info-grid { margin: 1.5mm 0; }' +
+                '.info-row { display: flex; justify-content: space-between; font-size: 9.5px; line-height: 1.6; }' +
+                '.info-row .label { color: #333; font-weight: 600; }' +
+                '.info-row .value { font-weight: 900; color: #000; }' +
+                '.section-title { font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; color: #333; margin: 2mm 0 1mm; }' +
+                '.items-header { display: flex; justify-content: space-between; font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; padding: 1mm 0; border-top: 2px solid #000; border-bottom: 2px solid #000; margin-bottom: 1mm; }' +
+                '.items-header span:first-child { flex: 1; }' +
+                '.items-header span:last-child { text-align: right; width: 28mm; }' +
+                '.item-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 0.8mm 0; line-height: 1.3; }' +
+                '.item-left { flex: 1; padding-right: 2mm; }' +
+                '.item-right { text-align: right; font-weight: 900; white-space: nowrap; color: #000; }' +
+                '.item-name { font-size: 10px; font-weight: 900; margin-bottom: 0.3mm; word-break: break-word; color: #000; }' +
+                '.item-qty-price { font-size: 8.5px; color: #333; font-weight: 600; }' +
+                '.item-sub { font-size: 7.5px; color: #555; padding-left: 1mm; margin-top: 0.3mm; font-weight: 600; }' +
+                '.summary { margin: 2mm 0; }' +
+                '.summary-row { display: flex; justify-content: space-between; font-size: 9.5px; padding: 0.6mm 0; }' +
+                '.summary-row .s-label { color: #333; font-weight: 600; }' +
+                '.summary-row .s-value { font-weight: 900; color: #000; }' +
+                '.summary-row.discount .s-value { color: #000; font-weight: 900; }' +
+                '.summary-total { display: flex; justify-content: space-between; font-size: 14px; font-weight: 900; padding: 1.5mm 0; border-top: 3px solid #000; border-bottom: 3px solid #000; margin: 1.5mm 0; letter-spacing: 0.5px; color: #000; }' +
+                '.summary-row.highlight-green .s-value { color: #000; font-weight: 900; }' +
+                '.payment-badge { display: inline-block; padding: 0.5mm 2mm; background: #000; color: #fff; border-radius: 2mm; font-size: 8px; font-weight: 900; letter-spacing: 0.5px; margin-top: 1mm; }' +
+                '.thankyou { font-size: 10px; font-weight: 900; text-align: center; margin: 3mm 0 1mm; letter-spacing: 0.5px; color: #000; }' +
+                '.footer-text { font-size: 7.5px; color: #333; text-align: center; line-height: 1.4; margin: 0.5mm 0; font-weight: 600; }' +
                 '</style></head><body><div class="receipt">' +
-
                 '<div class="center">' +
+                '<img src="/public/assets/images/malik-tuc-shop.png" class="logo" alt="Logo">' +
                 '<div class="store-name">MALIK TUC SHOP</div>' +
-                '<div class="store-info">Best Quality, Best Prices</div>' +
+                '<div class="store-tagline">Best Quality, Best Prices</div>' +
+                '<div class="store-contact">Contact: 0315-5318453</div>' +
                 '</div>' +
-
-                '<div class="double-divider"></div>' +
-
-                '<div class="info-row"><span>Sale #</span><span>' + esc(d.sale_number) + '</span></div>' +
-                '<div class="info-row"><span>Date</span><span>' + esc(d.created_at) + '</span></div>' +
-                '<div class="info-row"><span>Cashier</span><span>' + esc(d.cashier_name) + '</span></div>' +
-                (d.payment_method ? '<div class="info-row"><span>Payment</span><span>' + esc(d.payment_method.toUpperCase()) + '</span></div>' : '') +
-
+                '<div class="divider-double"></div>' +
+                '<div class="info-grid">' +
+                '<div class="info-row"><span class="label">Receipt #</span><span class="value">' + esc(d.sale_number) + '</span></div>' +
+                '<div class="info-row"><span class="label">Date</span><span class="value">' + esc(d.created_at) + '</span></div>' +
+                '<div class="info-row"><span class="label">Cashier</span><span class="value">' + esc(d.cashier_name) + '</span></div>' +
+                (d.payment_method ? '<div class="info-row"><span class="label">Payment</span><span class="value"><span class="payment-badge">' + esc(d.payment_method.toUpperCase()) + '</span></span></div>' : '') +
+                '</div>' +
                 '<div class="divider"></div>' +
-
-                '<table><thead><tr><th>Item</th><th class="c" style="width:15%">Qty</th><th class="r" style="width:28%">Total</th></tr></thead>' +
-                '<tbody>' + itemsHtml + '</tbody></table>' +
-
-                '<div class="double-divider"></div>' +
-
-                '<div class="totals">' +
-                '<div class="row"><span>Subtotal</span><span>Rs. ' + parseFloat(d.subtotal).toFixed(2) + '</span></div>' +
-                (parseFloat(d.discount) > 0 ? '<div class="row"><span>Discount</span><span>- Rs. ' + parseFloat(d.discount).toFixed(2) + '</span></div>' : '') +
-                (parseFloat(d.tax) > 0 ? '<div class="row"><span>Tax</span><span>Rs. ' + parseFloat(d.tax).toFixed(2) + '</span></div>' : '') +
-                '<div class="row grand"><span>TOTAL</span><span>Rs. ' + parseFloat(d.total).toFixed(2) + '</span></div>' +
+                '<div class="items-header"><span>Item</span><span style="text-align:right">Total</span></div>' +
+                itemsHtml +
+                '<div class="divider-double"></div>' +
+                '<div class="summary">' +
+                '<div class="summary-row"><span class="s-label">Subtotal</span><span class="s-value">Rs. ' + parseFloat(d.subtotal).toFixed(2) + '</span></div>' +
+                (parseFloat(d.discount) > 0 ? '<div class="summary-row discount"><span class="s-label">Discount</span><span class="s-value">- Rs. ' + parseFloat(d.discount).toFixed(2) + '</span></div>' : '') +
+                (parseFloat(d.tax) > 0 ? '<div class="summary-row"><span class="s-label">Tax</span><span class="s-value">Rs. ' + parseFloat(d.tax).toFixed(2) + '</span></div>' : '') +
+                '<div class="summary-total"><span>TOTAL</span><span>Rs. ' + parseFloat(d.total).toFixed(2) + '</span></div>' +
                 paidSection +
                 '</div>' +
-
-                '<div class="double-divider"></div>' +
-
-                '<div class="thank-you">Thank you for shopping!</div>' +
-                '<div class="footer"><p>Visit us again</p></div>' +
+                '<div class="divider-double"></div>' +
+                '<div class="thankyou">Thank You for Shopping!</div>' +
+                '<div class="footer-text">Visit us again</div>' +
+                '<div class="footer-text">Malik Tuc Shop &mdash; Quality You Can Trust</div>' +
                 '</div>' +
                 '<script>' +
                 'window.onload = function() {' +
-                '  var h = document.querySelector(".receipt").offsetHeight + 10;' +
+                '  var el = document.querySelector(".receipt");' +
+                '  var h = Math.ceil(el.getBoundingClientRect().height) + 10;' +
                 '  var s = document.createElement("style");' +
                 '  s.textContent = "@page { size: 80mm " + h + "px; margin: 0 !important; }";' +
                 '  document.head.appendChild(s);' +
-                '  setTimeout(function() { window.print(); }, 200);' +
+                '  setTimeout(function() { window.print(); }, 300);' +
                 '};' +
                 '<\/script>' +
                 '</body></html>';

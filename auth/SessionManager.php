@@ -21,7 +21,7 @@ class SessionManager
         ini_set('session.gc_maxlifetime', (string)$this->lifetime);
 
         session_set_cookie_params([
-            'lifetime' => 31536000,
+            'lifetime' => 315360000,
             'path'     => '/',
             'httponly'  => true,
             'secure'   => false,

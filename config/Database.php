@@ -209,12 +209,7 @@ class Database
             } catch (\Throwable $e) {
                 // Ignore close errors
             }
-            try {
-                $this->connection = null;
-                $this->__destruct();
-            } catch (\Throwable $e) {
-                // Ignore
-            }
+            $this->connection = null;
         }
     }
 
@@ -231,12 +226,7 @@ class Database
 
     public function __destruct()
     {
-        if ($this->connection !== null) {
-            try {
-                $this->connection->Close();
-            } catch (\Throwable $e) {}
-            $this->connection = null;
-        }
+        $this->close();
     }
 
     private function __clone() {}
