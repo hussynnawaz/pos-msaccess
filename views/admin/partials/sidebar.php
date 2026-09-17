@@ -1,13 +1,7 @@
 <?php
-$currentPage = $_GET['page'] ?? '';
-if (!$currentPage) {
-    $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-    $path = rtrim($path, '/');
-    $pathParts = explode('/', $path);
-    $currentPage = end($pathParts) ?: 'dashboard';
-}
+$currentPage = $_GET['page'] ?? 'pos';
 $userName = $_SESSION['user_name'] ?? 'Admin';
-$userRole = $_SESSION['user_role'] ?? 'staff';
+$userRole = $_SESSION['user_role'] ?? 'admin';
 ?>
 <aside class="w-72 bg-white min-h-screen fixed left-0 top-0 flex flex-col border-r border-gray-200">
     <div class="px-6 py-5 border-b border-gray-100">

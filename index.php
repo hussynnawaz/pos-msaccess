@@ -39,33 +39,12 @@ if ($path !== '/') {
     }
 }
 
-// Start session for web pages
-$session = new SessionManager();
-$session->start();
-
+// All web routes go directly to POS
 $path = rtrim($path, '/');
 
-$routes = [
-    ''                => 'views/home.php',
-    '/login'          => 'views/admin/login.php',
-    '/admin'          => 'views/admin/layout.php',
-    '/admin/login'    => 'views/admin/login.php',
-    '/admin/products' => 'views/admin/layout.php',
-    '/admin/suppliers'=> 'views/admin/layout.php',
-    '/admin/orders'   => 'views/admin/layout.php',
-    '/admin/pos'      => 'views/admin/layout.php',
-    '/admin/inventory'=> 'views/admin/layout.php',
-    '/admin/reports'  => 'views/admin/layout.php',
-    '/admin/backup'   => 'views/admin/layout.php',
-    '/admin/profile'  => 'views/admin/layout.php',
-];
-
-if (isset($routes[$path])) {
-    $view = __DIR__ . '/' . $routes[$path];
-    if (file_exists($view)) {
-        require $view;
-        exit;
-    }
+if ($path === '' || $path === '/admin' || strpos($path, '/admin/') === 0) {
+    require __DIR__ . '/views/admin/layout.php';
+    exit;
 }
 
 http_response_code(404);

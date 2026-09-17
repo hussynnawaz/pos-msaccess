@@ -5,7 +5,7 @@ class SessionManager
 
     public function __construct()
     {
-        $this->lifetime = (int)(getenv('SESSION_LIFETIME') ?: '120');
+        $this->lifetime = (int)(getenv('SESSION_LIFETIME') ?: '315360000');
     }
 
     public function start(): void

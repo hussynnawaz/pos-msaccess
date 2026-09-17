@@ -5,33 +5,23 @@ $session = new SessionManager();
 $session->start();
 
 if (!$session->isLoggedIn()) {
-    header('Location: /login');
-    exit;
+    $session->set('logged_in', true);
+    $session->set('user_name', 'Admin');
+    $session->set('user_role', 'admin');
 }
 
 $_SESSION['user_name'] = $session->get('user_name', 'Admin');
-$_SESSION['user_role'] = $session->get('user_role', 'staff');
+$_SESSION['user_role'] = $session->get('user_role', 'admin');
 
-$page = $_GET['page'] ?? '';
-if (!$page) {
-    $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-    $path = rtrim($path, '/');
-    $pathParts = explode('/', $path);
-    $page = end($pathParts) ?: 'dashboard';
-}
+$page = $_GET['page'] ?? 'pos';
 $validPages = ['dashboard', 'pos', 'orders', 'products', 'suppliers', 'inventory', 'reports', 'backup', 'profile'];
-if (!in_array($page, $validPages)) $page = 'dashboard';
+if (!in_array($page, $validPages)) $page = 'pos';
 
 $pageFile = __DIR__ . '/pages/' . $page . '.php';
-if (!file_exists($pageFile)) $pageFile = __DIR__ . '/pages/dashboard.php';
+if (!file_exists($pageFile)) $pageFile = __DIR__ . '/pages/pos.php';
 
-// If it's an HTMX request, render only the page fragment and exit to avoid nested layout loops
+// HTMX request: render page fragment only
 if (isset($_SERVER['HTTP_HX_REQUEST']) && $_SERVER['HTTP_HX_REQUEST'] === 'true') {
-    if (!$session->isLoggedIn()) {
-        http_response_code(401);
-        header('HX-Redirect: /login');
-        exit;
-    }
     require $pageFile;
     exit;
 }
@@ -59,10 +49,6 @@ if (isset($_SERVER['HTTP_HX_REQUEST']) && $_SERVER['HTTP_HX_REQUEST'] === 'true'
         </div>
     </div>
     <script>
-    async function logout() {
-        await fetch('/api/logout.php', { method: 'POST', credentials: 'same-origin' });
-        window.location.href = '/login';
-    }
     function getCurrentPage() {
         var params = new URLSearchParams(window.location.search);
         var page = params.get('page');
@@ -70,22 +56,8 @@ if (isset($_SERVER['HTTP_HX_REQUEST']) && $_SERVER['HTTP_HX_REQUEST'] === 'true'
             var parts = window.location.pathname.replace(/\/$/, '').split('/');
             page = parts[parts.length - 1];
         }
-        return page || 'dashboard';
+        return page || 'pos';
     }
-    document.body.addEventListener('htmx:responseError', function(e) {
-        if (e.detail.xhr && e.detail.xhr.status === 401) {
-            window.location.href = '/login';
-        }
-    });
-    var origFetch = window.fetch;
-    window.fetch = function() {
-        return origFetch.apply(this, arguments).then(function(res) {
-            if (res.status === 401) {
-                window.location.href = '/login';
-            }
-            return res;
-        });
-    };
 
     function updateBackupInfo() {
         var info = document.getElementById('backupInfo');
@@ -111,7 +83,6 @@ if (isset($_SERVER['HTTP_HX_REQUEST']) && $_SERVER['HTTP_HX_REQUEST'] === 'true'
 
         fetch(url, { credentials: 'same-origin' })
             .then(function(res) {
-                if (res.status === 401) { window.location.href = '/login'; return; }
                 if (!res.ok) return res.json().then(function(d) { throw new Error(d.message || 'Backup failed'); });
                 return res.blob();
             })
