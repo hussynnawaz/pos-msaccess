@@ -1,11 +1,7 @@
 var cart = [];
 var lastOrderData = null;
 var posInitialized = false;
-var selectedSuggestionIndex = -1;
 var productCache = {};
-var searchCache = {};
-var searchCacheExpiry = {};
-var SEARCH_CACHE_TTL = 30000;
 
 function initPOS() {
   var el = document.getElementById("barcodeInput");
@@ -27,22 +23,6 @@ function getCachedProduct(query) {
 
 function cacheProduct(query, product) {
   productCache[query] = product;
-}
-
-function getCachedSearchResults(query) {
-  if (
-    searchCache[query] &&
-    searchCacheExpiry[query] &&
-    Date.now() < searchCacheExpiry[query]
-  ) {
-    return searchCache[query];
-  }
-  return null;
-}
-
-function cacheSearchResults(query, results) {
-  searchCache[query] = results;
-  searchCacheExpiry[query] = Date.now() + SEARCH_CACHE_TTL;
 }
 
 function playErrorBeep() {
@@ -100,92 +80,22 @@ function closeProductErrorModal() {
 
 function setupPOSListeners() {
   var barcodeInput = document.getElementById("barcodeInput");
-  var suggestions = document.getElementById("barcodeSuggestions");
-  var searchDebounce = null;
-
-  barcodeInput.oninput = function () {
-    var self = this;
-    var query = self.value.trim();
-    selectedSuggestionIndex = -1;
-    if (query.length < 1) {
-      suggestions.classList.add("hidden");
-      return;
-    }
-
-    clearTimeout(searchDebounce);
-    searchDebounce = setTimeout(function () {
-      var cached = getCachedSearchResults(query);
-      if (cached) {
-        renderSuggestions(cached, suggestions);
-        return;
-      }
-
-      fetch("/api/products.php?search=" + encodeURIComponent(query), {
-        credentials: "same-origin",
-      })
-        .then(function (r) {
-          return r.json();
-        })
-        .then(function (data) {
-          if (data.success && data.data.length > 0) {
-            cacheSearchResults(query, data.data);
-            renderSuggestions(data.data, suggestions);
-          } else {
-            suggestions.innerHTML =
-              '<div class="px-4 py-3 text-sm text-gray-400">No products found</div>';
-            suggestions.classList.remove("hidden");
-          }
-        })
-        .catch(function () {
-          suggestions.innerHTML =
-            '<div class="px-4 py-3 text-sm text-red-400">Error searching products</div>';
-          suggestions.classList.remove("hidden");
-        });
-    }, 150);
-  };
 
   barcodeInput.onkeydown = function (e) {
-    var items = suggestions.querySelectorAll(".suggestion-item");
-    var count = items.length;
-
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      if (count === 0) return;
-      selectedSuggestionIndex = (selectedSuggestionIndex + 1) % count;
-      updateSuggestionHighlight(items);
-      return;
-    }
-
-    if (e.key === "ArrowUp") {
-      e.preventDefault();
-      if (count === 0) return;
-      selectedSuggestionIndex =
-        selectedSuggestionIndex <= 0 ? count - 1 : selectedSuggestionIndex - 1;
-      updateSuggestionHighlight(items);
-      return;
-    }
-
     if (e.key === "Enter") {
       e.preventDefault();
-      if (selectedSuggestionIndex >= 0 && selectedSuggestionIndex < count) {
-        var selected = items[selectedSuggestionIndex];
-        var productData = JSON.parse(selected.getAttribute("data-product"));
-        addProductToCart(productData);
-        return;
-      }
       var query = this.value.trim();
       if (!query) return;
+
+      var self = this;
 
       var cached = getCachedProduct(query);
       if (cached) {
         addProductToCart(cached);
-        this.value = "";
-        suggestions.classList.add("hidden");
-        selectedSuggestionIndex = -1;
+        self.value = "";
         return;
       }
 
-      var self = this;
       fetch("/api/products.php?barcode=" + encodeURIComponent(query), {
         credentials: "same-origin",
       })
@@ -210,20 +120,9 @@ function setupPOSListeners() {
         })
         .finally(function () {
           self.value = "";
-          suggestions.classList.add("hidden");
-          selectedSuggestionIndex = -1;
         });
     }
   };
-
-  document.addEventListener("click", function (e) {
-    var sug = document.getElementById("barcodeSuggestions");
-    var inp = document.getElementById("barcodeInput");
-    if (sug && inp && !sug.contains(e.target) && e.target !== inp) {
-      sug.classList.add("hidden");
-      selectedSuggestionIndex = -1;
-    }
-  });
 
   var paymentMethod = document.getElementById("paymentMethod");
   if (paymentMethod) {
@@ -232,61 +131,6 @@ function setupPOSListeners() {
       if (section)
         section.style.display = this.value === "credit" ? "none" : "block";
     };
-  }
-}
-
-function renderSuggestions(products, suggestionsContainer) {
-  var html = "";
-  for (var i = 0; i < products.length; i++) {
-    var p = products[i];
-    var safeName = escHtml(p.name);
-    var safeSku = escHtml(p.sku || "-");
-    var safeBarcode = escHtml(p.barcode || "-");
-    var price = parseFloat(p.selling_price).toFixed(2);
-    var purPrice = parseFloat(p.purchase_price).toFixed(2);
-    var pJson = JSON.stringify(p)
-      .replace(/'/g, "&#39;")
-      .replace(/\\/g, "\\\\")
-      .replace(/"/g, "&quot;");
-    html +=
-      '<div class="suggestion-item px-4 py-3 hover:bg-blue-50 cursor-pointer border-b border-gray-50 last:border-0" data-index="' +
-      i +
-      '" data-product="' +
-      pJson +
-      '" onclick="addProductToCart(' +
-      pJson +
-      ')">';
-    html += '<div class="flex items-center justify-between"><div>';
-    html += '<p class="text-sm font-medium text-gray-900">' + safeName + "</p>";
-    html +=
-      '<p class="text-xs text-gray-500">SKU: ' +
-      safeSku +
-      " | Barcode: " +
-      safeBarcode +
-      "</p>";
-    html +=
-      '<p class="text-xs text-gray-400 mt-1">Pur. Price: Rs. ' +
-      purPrice +
-      " | Stock: " +
-      p.stock +
-      "</p>";
-    html += '</div><div class="text-right">';
-    html +=
-      '<p class="text-sm font-semibold text-gray-900">Rs. ' + price + "</p>";
-    html += "</div></div></div>";
-  }
-  suggestionsContainer.innerHTML = html;
-  suggestionsContainer.classList.remove("hidden");
-}
-
-function updateSuggestionHighlight(items) {
-  for (var i = 0; i < items.length; i++) {
-    if (i === selectedSuggestionIndex) {
-      items[i].style.backgroundColor = "#dbeafe";
-      items[i].scrollIntoView({ block: "nearest" });
-    } else {
-      items[i].style.backgroundColor = "";
-    }
   }
 }
 
@@ -326,13 +170,10 @@ function addProductToCart(product) {
   renderCart();
   recalculate();
   var inp = document.getElementById("barcodeInput");
-  var sug = document.getElementById("barcodeSuggestions");
   if (inp) {
     inp.value = "";
     inp.focus();
   }
-  if (sug) sug.classList.add("hidden");
-  selectedSuggestionIndex = -1;
 }
 
 function renderCart() {
@@ -663,45 +504,45 @@ function printReceipt() {
     "@page { margin: 0 !important; size: 80mm auto; }" +
     "@media print { html, body { margin: 0 !important; padding: 0 !important; width: 80mm !important; overflow: hidden !important; } }" +
     "* { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }" +
-    'html, body { width: 80mm; font-family: Calibri, sans-serif; font-size: 11px; color: #000; background: #fff; }' +
+    'html, body { width: 80mm; font-family: Calibri, sans-serif; font-size: 14px; color: #000; background: #fff; font-weight: 700; }' +
     "@media print { " +
     "  body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }" +
-    "  .receipt { filter: contrast(1.8) brightness(0.85) !important; }" +
+    "  .receipt { filter: contrast(3) brightness(0.5) !important; }" +
     "}" +
-    ".receipt { width: 80mm; padding: 4mm 3mm; filter: contrast(1.8) brightness(0.85); }" +
+    ".receipt { width: 80mm; padding: 4mm 3mm; filter: contrast(3) brightness(0.5); }" +
     ".center { text-align: center; }" +
     ".logo { width: 38mm; margin: 0 auto 2mm; display: block; }" +
-    ".store-name { font-size: 15px; font-weight: 900; letter-spacing: 1.5px; margin-bottom: 1mm; color: #000; }" +
-    ".store-tagline { font-size: 8px; color: #333; letter-spacing: 0.5px; margin-bottom: 2mm; font-weight: 600; }" +
-    ".store-contact { font-size: 7.5px; color: #444; margin-bottom: 1mm; font-weight: 600; }" +
-    ".divider { border-top: 1px dashed #666; margin: 2mm 0; }" +
+    ".store-name { font-size: 20px; font-weight: 900; letter-spacing: 1.5px; margin-bottom: 1mm; color: #000; }" +
+    ".store-tagline { font-size: 11px; color: #000; letter-spacing: 0.5px; margin-bottom: 2mm; font-weight: 900; }" +
+    ".store-contact { font-size: 10px; color: #000; margin-bottom: 1mm; font-weight: 900; }" +
+    ".divider { border-top: 2px dashed #000; margin: 2mm 0; }" +
     ".divider-solid { border-top: 2px solid #000; margin: 2mm 0; }" +
     ".divider-double { border-top: 3px double #000; margin: 2mm 0; }" +
     ".info-grid { margin: 1.5mm 0; }" +
-    ".info-row { display: flex; justify-content: space-between; font-size: 9.5px; line-height: 1.6; }" +
-    ".info-row .label { color: #333; font-weight: 600; }" +
+    ".info-row { display: flex; justify-content: space-between; font-size: 12px; line-height: 1.6; }" +
+    ".info-row .label { color: #000; font-weight: 900; }" +
     ".info-row .value { font-weight: 900; color: #000; }" +
-    ".section-title { font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; color: #333; margin: 2mm 0 1mm; }" +
-    ".items-header { display: flex; justify-content: space-between; font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; padding: 1mm 0; border-top: 2px solid #000; border-bottom: 2px solid #000; margin-bottom: 1mm; }" +
+    ".section-title { font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; color: #000; margin: 2mm 0 1mm; }" +
+    ".items-header { display: flex; justify-content: space-between; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; padding: 1mm 0; border-top: 2px solid #000; border-bottom: 2px solid #000; margin-bottom: 1mm; }" +
     ".items-header span:first-child { flex: 1; }" +
     ".items-header span:last-child { text-align: right; width: 28mm; }" +
     ".item-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 0.8mm 0; line-height: 1.3; }" +
     ".item-left { flex: 1; padding-right: 2mm; }" +
     ".item-right { text-align: right; font-weight: 900; white-space: nowrap; color: #000; }" +
-    ".item-name { font-size: 10px; font-weight: 900; margin-bottom: 0.3mm; word-break: break-word; color: #000; }" +
-    ".item-qty-price { font-size: 8.5px; color: #333; font-weight: 600; }" +
-    ".item-sub { font-size: 7.5px; color: #555; padding-left: 1mm; margin-top: 0.3mm; font-weight: 600; }" +
+    ".item-name { font-size: 13px; font-weight: 900; margin-bottom: 0.3mm; word-break: break-word; color: #000; }" +
+    ".item-qty-price { font-size: 11px; color: #000; font-weight: 900; }" +
+    ".item-sub { font-size: 10px; color: #000; padding-left: 1mm; margin-top: 0.3mm; font-weight: 900; }" +
     ".summary { margin: 2mm 0; }" +
-    ".summary-row { display: flex; justify-content: space-between; font-size: 9.5px; padding: 0.6mm 0; }" +
-    ".summary-row .s-label { color: #333; font-weight: 600; }" +
+    ".summary-row { display: flex; justify-content: space-between; font-size: 12px; padding: 0.6mm 0; }" +
+    ".summary-row .s-label { color: #000; font-weight: 900; }" +
     ".summary-row .s-value { font-weight: 900; color: #000; }" +
     ".summary-row.discount .s-value { color: #000; font-weight: 900; }" +
-    ".summary-total { display: flex; justify-content: space-between; font-size: 14px; font-weight: 900; padding: 1.5mm 0; border-top: 3px solid #000; border-bottom: 3px solid #000; margin: 1.5mm 0; letter-spacing: 0.5px; color: #000; }" +
+    ".summary-total { display: flex; justify-content: space-between; font-size: 18px; font-weight: 900; padding: 1.5mm 0; border-top: 3px solid #000; border-bottom: 3px solid #000; margin: 1.5mm 0; letter-spacing: 0.5px; color: #000; }" +
     ".summary-row.highlight-green .s-value { color: #000; font-weight: 900; }" +
-    ".payment-badge { display: inline-block; padding: 0.5mm 2mm; background: #000; color: #fff; border-radius: 2mm; font-size: 8px; font-weight: 900; letter-spacing: 0.5px; margin-top: 1mm; }" +
-    ".thankyou { font-size: 10px; font-weight: 900; text-align: center; margin: 3mm 0 1mm; letter-spacing: 0.5px; color: #000; }" +
-    ".footer-text { font-size: 7.5px; color: #333; text-align: center; line-height: 1.4; margin: 0.5mm 0; font-weight: 600; }" +
-    ".qr-placeholder { text-align: center; margin: 2mm 0; font-size: 7px; color: #bbb; }" +
+    ".payment-badge { display: inline-block; padding: 0.5mm 2mm; background: #000; color: #fff; border-radius: 2mm; font-size: 11px; font-weight: 900; letter-spacing: 0.5px; margin-top: 1mm; }" +
+    ".thankyou { font-size: 13px; font-weight: 900; text-align: center; margin: 3mm 0 1mm; letter-spacing: 0.5px; color: #000; }" +
+    ".footer-text { font-size: 10px; color: #000; text-align: center; line-height: 1.4; margin: 0.5mm 0; font-weight: 900; }" +
+    ".qr-placeholder { text-align: center; margin: 2mm 0; font-size: 7px; color: #000; }" +
     '</style></head><body><div class="receipt">' +
     '<div class="center">' +
     '<img src="/public/assets/images/malik-tuc-shop.png" class="logo" alt="Logo">' +
